@@ -1,0 +1,239 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 PathTracer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2018</h1>
+<h1 align="middle">Project 3.1: PathTracer</h1>
+<h2 align="middle">Sara Maemoto, CS184-afb</h2>
+
+<br><br>
+
+<div>
+    <div class="padded">
+        <p>In this project I created a physically-based renderer using a pathtracing algorithm. This required generating rays, following intersections, calculating appropriate illumination based on materials and angles. In part 2 of this project I was also able to accellerate part of the project by segmenting different parts of the scene. This allowed for less checks with each object in the scene. I think the most difficult part of the project was part 2 and 3. Part 2 was difficult because of the initial slow rendering time. The same can be said for when I started part 3. Unfortunately, I thought I had finished part 2 when I had started part 3. Which made my renders extremely slow. I talk more in depth about how I fixed this in section 2 of this report. I believe time was my greatest enemy when it came to this project. Even when I had finished with the code, it still took hours to finish all of the required renders.</p>
+
+    <h2 align="middle">Part 1: Ray Generation and Intersection</h2>
+        <p>The first thing I did was generate a random ray through a pixel. To do this I took my pixel index and chose 2 random numbers that were less than 1 and added one to my pixel position x and the other to y. I then scaled the position down to [0, 1]^2 space by dividing x by the width and y by the height. Using this scaled position, I reposition the point within the camera frame and generated a ray. I was able to accomplish this by multiplying my scaled position by 2 and subtracting by 1. This brought my point into a [-1,1]^2 space, which represented the camera space. I then multiplied this point by scaling factors that corresponded to two field of view angles and then normalized the results. This became the generated ray's diretion. After getting the ray, I then checked to see if this ray intersected with any of the trianlges within the scene. To see if the ray interesected a triangle I used the Moller Trumbore algorithm. Using the 3 vertices of the triangle, the camera's position, and the direction of the ray, I was able to calculate the "time" that the ray hit the triangle, and also the barycentric coordinates associated with the intersection point. Using these found values I was able to set the new max time for the ray to that intersection's time (which keeps track of the closest object the ray hits). The barycentric coordinates helped to find the hit point according to the surface normal. The surface normal, primitive, and bsdf from the intersected triangle was saved in the intersect variable. This made it easy to keep track of what the ray was hitting first and what the camera could actually see.</p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/Part1_1.png" width="480px" />
+                    <figcaption align="middle">Empty room with only triangles.</figcaption>
+
+                    <td align="middle">
+                    <img src="images/Part1_2.png" width="480px" />
+                    <figcaption align="middle">Room with triangles and circles.</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/Part1_3.png" width="480px" />
+                    <figcaption align="middle">Spring with 7884 primitives.</figcaption>
+                </tr>
+            </table>
+        </div>
+    <h2 align="middle">Part 2: Bounding Volume Hierarchy</h2>
+        <p>To construct my BVH, I recursively built boxes around my primitives. I first built a box around all of my of my primitives, and then split that box if it contained more than a certain amount of primitives. I then saved these splits to the left and right children nodes of the box I created. I chose to do my split based off of the center point becaue I figured this would be more beneficial when it came to empty spaces. I chose the axis of my split based on the axis with the largest difference in it's max and min point. Doing this recursively results in a tree of boxes containing sets of primitives. To implement intersecting for my BVH, I first created a function that checked to see if the ray intersected the outside box, if it did and the box was within the ray max_t, then I either check the boxes inside of it if it's not a leaf. If it is a leaf, then I check all of the primitives in that leaf.</p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/Part2_1.png" width="480px" />
+                    <figcaption align="middle">Cow with 5856 primitives.</figcaption>
+
+                    <td align="middle">
+                    <img src="images/Part2_2.png" width="480px" />
+                    <figcaption align="middle">Teapot with 2464 primitives.</figcaption>
+                </tr>
+            </table>
+        </div>
+        <p>Before implementing BVH rendering the cow took 60 minutes. After implementation, it took 20 minutes to render. The faster rendering also required less intersection tests. Which allowed for less calculations and less checks to each primitive. After much frustration with how long it was taking to render, I decided to switch computers. The 20 minute render was on my asus which has 4GB of RAM, running on the VMware. I borrowed my mom's computer, a 16GB macbook which sped things up tremendously. I found that I was able to bring down my render time to less than a second. After some edits I tried running it on my asus again. And low and behold it ran it in around 8 seconds. The problem was with how I was checking the bounds of the box. At first I had a correct implementation, but I thought it was taking too long because of how many calculations I was doing in my Bbox intersection. So, I commented my original code out and tried to write one that used did less calculations, unfortunately this caused my bounds to be much to big which required a lot of unnecessary primitive checks.</p>
+
+    <h2 align="middle">Part 3: Direct Illumination</h2>
+        <p>Uniform hemisphere sampling required me to check a bunch of samples in a uniform hemisphere around a intersection point for the camera and a primitive. If that sample intersected a light source, then I would take the incoming radiance from the light source and convert it to the outgoing radiance based on the BSDF of the surface and then sum up all of those weighted values. To do this I took a random ray going to the hit point and casted the ray to see if it intersected with anything. If it did intersect with something I found the emitted light of that primitive and then converted it to the radiance coming off of the primitive, which is based on the material of the primitive (bsdf) and angle of the ray. For importance sampling I'm going the opposite way, I'm taking samples from each of the light sources, and computing the radiance that intersects my hit point. To implement importance sampling, I looped over every light source in the scene and found an incoming vector to the hip point, a distance from the light to the hit point, and the probability desity function. Then I checked the incoming vector's z position and if it was negative (meaning the light is behind the surface), then I skipped this particular ray. If it was positive I casted the ray from teh intersection point towards the light to see if it intersected with anything else in the scene. If it did that means it was part of a shadow, otherwise that means there was a direct hit to the light which allowed for illumination of that part of the primitive.</p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_uniform_64_32.png" width="480px" />
+                    <figcaption align="middle">Bunny with uniform sampling at 64 samples and 32 light rays.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/bunny_importance_64_32.png" width="480px" />
+                    <figcaption align="middle">Bunny with importance sampling at 64 samples and 32 light rays.</figcaption>
+                
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_1_1.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1 sample and 1 light ray.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/bunny_1_4.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1 sample and 4 light ray.</figcaption>
+                
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_1_16.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1 sample and 16 light ray.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/bunny_1_64.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1 sample and 64 light ray.</figcaption>
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/dragon_64_32.png" width="480px" />
+                    <figcaption align="middle">Dragon at 64 samples and 32 light rays.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/banana_64_32.png" width="480px" />
+                    <figcaption align="middle">Banana at 64 samples and 32 light rays.</figcaption>
+                
+                </tr>
+            </table>
+        </div>
+        <p>As you can see from the first 2 images, there is a lot less black noise with the importance sampling vs. the uniform sampling. Usng importance sampling allows for less "misses" while the random sampling around a hemisphere of the hit point may never randomly hit the light source, producing this black noise. This is because you are not able to take every single ray in that hemisphere and so there will be potential light sources you are missing when taking you samples. While importance sampling guarentees you are incorporating each light source. As you can see from the following 4 bunny images, if there are not enough light rays, there may still be a lot of noise. This noise is due to the fact that you are only averaging a low amount of light rays coming from each source. If that light ray is intersected by another primitive, or the angle at which this particuluar light ray hits the primitive is not ideal, it results in black noise. Having more light rays allows for different angles which results in a higher chance of actually finding some amount of light that hits the primitive at that point.</p>
+
+    <h2 align="middle">Part 4: Global Illumination</h2>
+        <p>To implement global illumination, I wrote 3 functions. One accounted for no bounces. This means that the light that arrived at this point was directly from a light source. This function returned the intersections bsdf. I created another function that accounted for a single bounce, representing a light that hit a primitive before hitting my current primitive. For this function I returned either the results from importance sampling, or uniform hemisphere samping depending on what the user asked for. The third function is a recursive call that follows a light ray's bounce from primitive to primitive. It ends the recursion if it has reached it's max depth (max amount of bounces), or if it has hit it's random termination call (Russian roulette), or if the ray does not intersect with anything else in the scene. This function sums up all of these results and weights the final bsdf for an appropriate final bsdf.</p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/spheres_direct_32_64_0.png" width="480px" />
+                    <figcaption align="middle">Spheres direct illumination at 64 samples, 32 light rays, and a depth of 0.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/spheres_indirect_32_64_6.png" width="480px" />
+                    <figcaption align="middle">Spheres indirect illumination at 64 samples, 32 light rays, and a depth of 6.</figcaption>
+                
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_0.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1024 samples, 4 light rays, and a depth of 0.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/bunny_1.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1024 samples, 4 light rays, and a depth of 1.</figcaption>
+                
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_2.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1024 samples, 4 light rays, and a depth of 2.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/bunny_3.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1024 samples, 4 light rays, and a depth of 3.</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_100.png" width="480px" />
+                    <figcaption align="middle">Bunny at 1024 samples, 4 light rays, and a depth of 100.</figcaption>                
+                </tr>
+            </table>
+        </div>
+
+        <p>As you can see from the images above, in order to have light reach the roof, there needs to be a minimum of 3 bounces. The difference between a depth of 3 and 100 is subtle, but with the depth of 100 you can see in the corners of the room it's slightly brighter than with a depth of 3.</p>
+
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/Spheres_samples_1.png" width="480px" />
+                    <figcaption align="middle">Spheres at 1 sample, 4 light rays, and a depth of 6.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/spheres_samples_2.png" width="480px" />
+                    <figcaption align="middle">Spheres at 2 samples, 4 light rays, and a depth of 6.</figcaption>
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/spheres_samples_4.png" width="480px" />
+                    <figcaption align="middle">Spheres at 4 samples, 4 light rays, and a depth of 6.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/spheres_samples_8.png" width="480px" />
+                    <figcaption align="middle">Spheres at 8 samples, 4 light rays, and a depth of 6.</figcaption>
+                </tr>
+                <tr>
+                    <td align="middle">
+                    <img src="images/spheres_samples_16.png" width="480px" />
+                    <figcaption align="middle">Spheres at 16 samples, 4 light rays, and a depth of 6.</figcaption>
+                    
+                    <td align="middle">
+                    <img src="images/spheres_samples_64.png" width="480px" />
+                    <figcaption align="middle">Spheres at 64 samples, 4 light rays, and a depth of 6.</figcaption>
+                </tr>
+            </table>
+        </div>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/spheres_samples_1024.png" width="480px" />
+                    <figcaption align="middle">Spheres at 1024 samples, 4 light rays, and a depth of 6.</figcaption>                
+                </tr>
+            </table>
+        </div>
+
+    <h2 align="middle">Part 5: Adaptive Sampling</h2>
+        <p>To implement adaptive sampling I essentially kept track of every sample's illuminance by keeping the sum in 1 variable and the sum of the illuminance squared in another variable. Every so often I would check to see if the pixel converged with a confidence of 95%. I made this check by calculating the standard error times the critical value and compared this to the max tolerance times the average illuminance. If my standard error times critical value was greater, then I stop sampling and return the resulting radiance divided by the number of samples I tested.</p>
+        <div align="center">
+            <table style="width=100%">
+                <tr>
+                    <td align="middle">
+                    <img src="images/bunny_p5.png" width="480px" />
+                    <figcaption align="middle">Bunny at 2048 samples, 1 light rays, and a depth of 5.</figcaption>                
+
+                    <td align="middle">
+                    <img src="images/bunny_p5_rate.png" width="480px" />
+                    <figcaption align="middle">Rate for bunny.</figcaption>                
+                </tr>
+            </table>
+        </div>
+
+
+        <h3 align="middle">Extra Information</h3>
+        <p>With respect to UC Berkeley's academic integrety, I will not be posting the code associated with this project. Please contact me directly for my completed work.</p>
+
+
+</div>
+</body>
+</html>
+
+
+
+
